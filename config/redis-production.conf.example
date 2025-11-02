@@ -1,0 +1,53 @@
+# Redis 生产环境配置示例
+# 复制此文件到生产服务器并修改相关路径和参数
+
+# 网络配置
+bind 127.0.0.1
+port 6379
+protected-mode yes
+
+# 安全配置
+requirepass your-strong-redis-password-here  # 设置强密码，与 .env 中的 REDIS_PASSWORD 对应
+
+# 持久化配置 - 混合持久化（推荐）
+# RDB 配置
+save 900 1      # 900 秒内至少 1 个 key 发生变化时保存
+save 300 10     # 300 秒内至少 10 个 key 发生变化时保存
+save 60 10000   # 60 秒内至少 10000 个 key 发生变化时保存
+dbfilename dump.rdb
+dir /var/lib/redis  # 修改为实际的数据目录
+rdbcompression yes
+
+# AOF 配置
+appendonly yes
+appendfilename "appendonly.aof"
+appendfsync everysec  # 每秒同步一次（推荐）
+no-appendfsync-on-rewrite no
+
+# 混合持久化（Redis 4.0+）
+aof-use-rdb-preamble yes
+
+# AOF 重写配置
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+
+# 内存管理
+maxmemory 2gb  # 根据实际情况调整
+maxmemory-policy allkeys-lru  # 内存不足时删除最少使用的 key
+
+# 日志配置
+loglevel notice
+logfile /var/log/redis/redis-server.log  # 修改为实际的日志路径
+
+# 其他配置
+daemonize yes  # 以守护进程方式运行
+pidfile /var/run/redis/redis-server.pid  # 修改为实际的 pid 文件路径
+
+# 客户端连接
+timeout 300  # 客户端空闲 300 秒后关闭连接
+tcp-keepalive 300
+
+# 慢查询日志
+slowlog-log-slower-than 10000  # 记录执行时间超过 10 毫秒的命令
+slowlog-max-len 128
+

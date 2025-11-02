@@ -1,59 +1,132 @@
-const jwt = require('jsonwebtoken');
-const { getRedisClient } = require('../config/redis');
-const { ResponseUtil, ERROR_CODES } = require('../utils/response');
+/*
+ * @Author: goodlovess 936106161@qq.com
+ * @Date: 2025-11-02 11:43:10
+ * @LastEditors: goodlovess 936106161@qq.com
+ * @LastEditTime: 2025-11-02 19:22:20
+ * @FilePath: /server-frond/src/controllers/authController.js
+ * @Description: 这是默认设置,请设置`customMade`, 打开koroFileHeader查看配置 进行设置: https://github.com/OBKoro1/koro1FileHeader/wiki/%E9%85%8D%E7%BD%AE
+ */
+const jwt = require("jsonwebtoken");
+const { getRedisClient } = require("../config/redis");
+const { query } = require("../config/database");
+const { ResponseUtil, ERROR_CODES } = require("../utils/response");
+
+/**
+ * 解析时间长度字符串，转换为毫秒数
+ * @param {string} durationStr - 时间长度字符串，如 "1h", "2d", "1y"
+ * @returns {number} 毫秒数
+ */
+const parseDuration = (durationStr) => {
+  if (!durationStr || typeof durationStr !== "string") {
+    throw new Error("Invalid duration format");
+  }
+
+  // 匹配数字和单位 (h, d, y)
+  const match = durationStr.match(/^(\d+)([hdy])$/);
+  if (!match) {
+    throw new Error(
+      "Invalid duration format. Only 'h' (hour), 'd' (day), 'y' (year) are allowed"
+    );
+  }
+
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+
+  // 根据单位转换为毫秒
+  const multipliers = {
+    h: 60 * 60 * 1000, // 小时
+    d: 24 * 60 * 60 * 1000, // 天
+    y: 365 * 24 * 60 * 60 * 1000, // 年（简化计算，不考虑闰年）
+  };
+
+  return value * multipliers[unit];
+};
 
 const getAccess = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { tel } = req.body;
 
-    if (!userId) {
-      return res.status(400).json(ResponseUtil.error('User ID is required', ERROR_CODES.GENERAL_ERROR));
+    if (!tel) {
+      return res
+        .status(400)
+        .json(
+          ResponseUtil.error(
+            "Phone number is required",
+            ERROR_CODES.GENERAL_ERROR
+          )
+        );
     }
 
-    // Mock user validation (in a real implementation, this would query PostgreSQL)
-    // For demo purposes, we'll accept any non-empty userId as valid
-    // In a real application, you would query your PostgreSQL database here:
-    /*
-    const userQuery = 'SELECT id, username, expires_at FROM users WHERE id = $1 AND active = true';
-    const result = await query(userQuery, [userId]);
+    // 从 PostgreSQL 通过手机号查询用户信息
+    const userQuery =
+      "SELECT id, tel, username, expires_at, created_at FROM users WHERE tel = $1 AND active = true";
+    const result = await query(userQuery, [tel]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json(ResponseUtil.error('User not found or inactive', ERROR_CODES.INVALID_USER));
+      return res
+        .status(404)
+        .json(
+          ResponseUtil.error(
+            "User not found or inactive",
+            ERROR_CODES.INVALID_USER
+          )
+        );
     }
 
     const user = result.rows[0];
 
-    // Check if user account is expired
-    if (new Date(user.expires_at) < new Date()) {
-      return res.status(403).json(ResponseUtil.error('User account expired', ERROR_CODES.INVALID_USER));
+    // 解析过期时间长度（如 "1h", "2d", "1y"）
+    let durationMs;
+    try {
+      durationMs = parseDuration(user.expires_at);
+    } catch (error) {
+      return res
+        .status(400)
+        .json(
+          ResponseUtil.error(
+            `Invalid expires_at format: ${error.message}`,
+            ERROR_CODES.GENERAL_ERROR
+          )
+        );
     }
-    */
 
-    // For demo purposes, we'll mock a valid user
-    const user = {
-      id: userId,
-      username: `user_${userId}`,
-      expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days from now
-    };
+    // 计算用户账户过期时间点：created_at + expires_at
+    const createdAt = new Date(user.created_at);
+    const userExpiresAt = createdAt.getTime() + durationMs;
+    const now = Date.now();
 
-    // Generate token
+    // 检查用户账户是否过期
+    if (userExpiresAt < now) {
+      return res
+        .status(403)
+        .json(
+          ResponseUtil.error("User account expired", ERROR_CODES.INVALID_USER)
+        );
+    }
+
+    // Token 过期时间设置为计算出的过期时间点
+    const tokenExp = Math.floor(userExpiresAt / 1000);
+
+    // Generate token (基于 tel 和过期时间)
     const tokenPayload = {
-      userId: user.id,
-      username: user.username,
-      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+      tel: tel,
+      exp: tokenExp,
     };
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET || 'secret_key');
+    const token = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET || "secret_key"
+    );
 
-    // Store token in Redis with expiration time
+    // Store token in Redis with expiration time (使用手机号作为key)
     const redisClient = getRedisClient();
-    const redisExpiration = 24 * 60 * 60; // 24 hours in seconds
-    await redisClient.setEx(`token:${userId}`, redisExpiration, token);
+    const redisExpiration = tokenExp - Math.floor(now / 1000); // 剩余秒数
+    await redisClient.setEx(`token:${tel}`, redisExpiration, token);
 
-    res.json(ResponseUtil.success({ token }, 'Token generated successfully'));
+    res.json(ResponseUtil.success({ token }, "Token generated successfully"));
   } catch (error) {
-    console.error('Get access error:', error);
-    res.status(500).json(ResponseUtil.serverError('Failed to generate token'));
+    console.error("Get access error:", error);
+    res.status(500).json(ResponseUtil.serverError("Failed to generate token"));
   }
 };
 
