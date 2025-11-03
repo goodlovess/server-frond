@@ -72,7 +72,7 @@ const ollamaRequest = async (req, res) => {
             .status(500)
             .json(
               ResponseUtil.serverError(
-                `Ollama response error: ${error.message}`
+                `Ollama 响应错误：${error.message}`
               )
             );
         }
@@ -85,7 +85,7 @@ const ollamaRequest = async (req, res) => {
       if (!res.headersSent) {
         res
           .status(500)
-          .json(ResponseUtil.serverError(`Ollama error: ${error.message}`));
+          .json(ResponseUtil.serverError(`Ollama 错误：${error.message}`));
       }
     });
 
@@ -109,7 +109,7 @@ const ollamaRequest = async (req, res) => {
     if (!res.headersSent) {
       res
         .status(500)
-        .json(ResponseUtil.serverError(`Ollama error: ${error.message}`));
+        .json(ResponseUtil.serverError(`Ollama 错误：${error.message}`));
     }
   }
 };

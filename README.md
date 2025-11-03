@@ -8,6 +8,7 @@
 - PostgreSQL 用户验证
 - Redis 令牌存储与过期管理
 - 用户 active 状态检查与缓存（2 小时缓存）
+- **接口并行数量控制**：支持配置用户允许的接口并行数量，防止并发请求超限
 - 标准化的 API 响应格式
 - 基于环境的配置
 - 用于验证的测试端点
@@ -56,20 +57,22 @@ CREATE TABLE users (
   tel VARCHAR(20) UNIQUE NOT NULL,
   active BOOLEAN DEFAULT true,
   expires_at VARCHAR(10) NOT NULL,
+  max_concurrent_requests INTEGER DEFAULT 1,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
 **字段说明:**
 
-| 字段名     | 类型        | 约束                      | 说明                                                        |
-| ---------- | ----------- | ------------------------- | ----------------------------------------------------------- |
-| id         | SERIAL      | PRIMARY KEY               | 用户唯一标识，自增主键                                      |
-| username   | VARCHAR(50) | (可选)                    | 用户名，可选字段                                            |
-| tel        | VARCHAR(20) | UNIQUE, NOT NULL          | 手机号，唯一且不能为空，用于用户认证                        |
-| active     | BOOLEAN     | DEFAULT true              | 用户账户是否激活，默认为 true                               |
-| expires_at | VARCHAR(10) | NOT NULL                  | 用户账户有效期长度，格式为 "数字+单位"，如 "1h"、"2d"、"1y" |
-| created_at | TIMESTAMP   | DEFAULT CURRENT_TIMESTAMP | 用户创建时间，自动设置为当前时间                            |
+| 字段名                  | 类型        | 约束                      | 说明                                                           |
+| ----------------------- | ----------- | ------------------------- | -------------------------------------------------------------- |
+| id                      | SERIAL      | PRIMARY KEY               | 用户唯一标识，自增主键                                         |
+| username                | VARCHAR(50) | (可选)                    | 用户名，可选字段                                               |
+| tel                     | VARCHAR(20) | UNIQUE, NOT NULL          | 手机号，唯一且不能为空，用于用户认证                           |
+| active                  | BOOLEAN     | DEFAULT true              | 用户账户是否激活，默认为 true                                  |
+| expires_at              | VARCHAR(10) | NOT NULL                  | 用户账户有效期长度，格式为 "数字+单位"，如 "1h"、"2d"、"1y"    |
+| max_concurrent_requests | INTEGER     | DEFAULT 1                 | 用户允许的接口并行数量，默认为 1（同一时间段只能请求一个接口） |
+| created_at              | TIMESTAMP   | DEFAULT CURRENT_TIMESTAMP | 用户创建时间，自动设置为当前时间                               |
 
 **expires_at 字段格式说明:**
 
@@ -123,6 +126,9 @@ ALTER TABLE users ALTER COLUMN tel SET NOT NULL;
 -- ALTER TABLE users ALTER COLUMN expires_at TYPE VARCHAR(10);
 -- 示例：将已有的时间戳转换为时间长度（需要根据实际情况调整）
 -- UPDATE users SET expires_at = '1y' WHERE expires_at IS NOT NULL;
+
+-- 添加 max_concurrent_requests 字段
+ALTER TABLE users ADD COLUMN max_concurrent_requests INTEGER DEFAULT 1;
 ```
 
 ## 项目结构
@@ -134,7 +140,7 @@ server-frond/
 ├── src/
 │   ├── config/                    # 应用配置文件(数据库，redis)
 │   ├── controllers/               # 请求处理器
-│   ├── middleware/                # 认证中间件
+│   ├── middleware/                # 认证中间件和并发控制中间件
 │   ├── routes/                    # API路由定义
 │   ├── utils/                     # 工具函数
 │   └── models/                    # 数据模型(如有需要)
@@ -197,6 +203,7 @@ Authorization: Bearer YOUR_JWT_TOKEN
 - `1001` - 无效用户
 - `1002` - 令牌过期
 - `1003` - 令牌无效
+- `1004` - 并行数超过
 - `2001` - 数据库错误
 - `2002` - Redis 错误
 
@@ -241,8 +248,10 @@ npm run dev
    - 计算用户账户过期时间点：`created_at` + `expires_at`（时间长度）
    - 检查账户是否过期：过期时间点 < 当前时间
    - 如果有效，将 token 过期时间设置为计算出的过期时间点
-   - 生成 JWT 令牌（令牌中包含 `tel` 和 `exp`）
-   - 将令牌存储在 Redis 中（key 为 `token:{tel}`），设置计算出的过期时间
+   - 从用户信息中获取 `max_concurrent_requests` 字段（默认值为 1）
+   - 生成 JWT 令牌（令牌中包含 `tel`、`exp` 和 `maxConcurrent`）
+   - 构建合并数据：`token-concurrent-active`（token、并发数 0、active 状态 true）
+   - 将合并数据存储在 Redis 中（key 为 `token:{tel}`），设置计算出的过期时间
    - 向用户返回令牌
 
 2. **令牌验证** (受保护端点):
@@ -251,18 +260,31 @@ npm run dev
    - 系统验证 JWT 签名
    - 检查令牌是否存在于 Redis 中
    - 验证令牌是否过期
-   - **检查用户 active 状态（带缓存）**:
-     - 优先从 Redis 缓存查询用户 active 状态（key: `user:active:{tel}`）
-     - 如果缓存不存在，从 PostgreSQL 查询用户 active 状态
-     - 将查询结果缓存到 Redis，过期时间为 2 小时
+   - **检查用户 active 状态（从合并数据中读取）**:
+     - 从 Redis 获取合并数据（key: `token:{tel}`），解析出 active 状态
+     - 如果合并数据不存在，从 PostgreSQL 查询用户 active 状态（降级方案）
      - 如果用户 `active = false`，返回 403 Forbidden 错误
+   - **检查接口并发数量限制**:
+     - 从 JWT token 中解析 `maxConcurrent` 字段（用户允许的最大并发请求数）
+     - 从 Redis 获取合并数据（key: `token:{tel}`），解析出当前并发请求数
+     - 如果当前并发数 >= 最大并发数，返回 403 Forbidden 错误（错误码：1004，错误消息："并行数超过"）
+     - 如果允许，将并发数+1，更新合并数据并写回 Redis（保持相同的过期时间）
+     - 将 token key 保存到 `req.user.tokenKey`，供接口结束时使用
    - 如果所有检查通过，允许访问
 
-3. **令牌过期**:
+3. **接口请求处理**:
+
+   - 接口请求开始时，并发计数器已通过认证中间件+1（更新合并数据中的并发数）
+   - 所有需要认证的路由都应该使用 `decreaseConcurrentOnFinish` 中间件（在 `authenticateToken` 之后）
+   - 该中间件会监听响应结束事件（`finish` 或 `close`）
+   - 接口处理完成后（无论成功或失败），解析合并数据，将并发数-1 并更新合并数据
+   - 确保每个请求都能正确释放并发资源
+
+4. **令牌过期**:
 
    - 令牌过期时间点 = `created_at` + `expires_at`（解析后的时间长度）
    - 令牌会在用户账户过期时间点失效，确保与账户有效期一致
-   - 过期的令牌会自动从 Redis 中移除
+   - 过期的合并数据会自动从 Redis 中移除（包括 token、并发数和 active 状态）
    - 用户必须在过期后请求新令牌
 
 ## 数据存储设计
@@ -273,42 +295,43 @@ Redis 用于存储 JWT 令牌和缓存用户状态，实现令牌的快速验证
 
 **Key 格式:**
 
-| Key 格式            | 示例                      | 说明                               |
-| ------------------- | ------------------------- | ---------------------------------- |
-| `token:{tel}`       | `token:13800138000`       | 存储手机号对应的 JWT 令牌          |
-| `user:active:{tel}` | `user:active:13800138000` | 缓存用户 active 状态（2 小时过期） |
+| Key 格式      | 示例                | 说明                                                                                        |
+| ------------- | ------------------- | ------------------------------------------------------------------------------------------- |
+| `token:{tel}` | `token:13800138000` | 存储合并数据：JWT 令牌、当前并发请求数、用户 active 状态（格式：`token-concurrent-active`） |
 
 **Key 详细说明:**
 
 #### `token:{tel}`
 
-- **用途**: 存储用户的有效 JWT 令牌
-- **存储内容**: JWT 令牌字符串（完整的 Bearer token，不包含 "Bearer " 前缀）
+- **用途**: 存储用户的 JWT 令牌、当前并发请求数和 active 状态的合并数据
+- **存储内容**: 合并数据字符串，格式为 `{token}-{concurrent}-{active}`
+  - `token`: JWT 令牌字符串（完整的 Bearer token，不包含 "Bearer " 前缀）
+  - `concurrent`: 当前并发请求数（整数，字符串格式）
+  - `active`: 用户 active 状态（"true" 或 "false"）
 - **过期时间**: 动态计算，等于用户账户过期时间点
   - 过期时间点 = `created_at` + `expires_at`（解析后的时间长度）
   - Token 会在计算出的过期时间点失效
 - **数据结构**: String
+- **解析方式**: 使用 `-` 分隔符从右往左解析，确保即使 token 中包含 `-` 也能正确解析
+  - 最后一个 `-` 后面是 `active`
+  - 倒数第二个 `-` 到最后一个 `-` 之间是 `concurrent`
+  - 前面所有部分是 `token`
 - **操作命令**:
-  - 设置: `SETEX token:{tel} {expiration_seconds} {jwt_token}`
-  - 获取: `GET token:{tel}`
+  - 设置: `SETEX token:{tel} {expiration_seconds} {token}-{concurrent}-{active}`
+  - 获取: `GET token:{tel}`，然后使用工具函数解析
+  - 更新: `SETEX token:{tel} {ttl} {new_combined_data}`（先获取 TTL，再更新）
   - 删除: `DEL token:{tel}` (Redis 会自动在过期后删除)
-
-#### `user:active:{tel}`
-
-- **用途**: 缓存用户的 active 状态，避免每次请求都查询 PostgreSQL
-- **存储内容**: `"true"` 或 `"false"`（字符串）
-- **过期时间**: 2 小时（7200 秒）
-- **数据结构**: String
-- **操作命令**:
-  - 设置: `SETEX user:active:{tel} 7200 true|false`
-  - 获取: `GET user:active:{tel}`
-  - 删除: `DEL user:active:{tel}` (Redis 会自动在过期后删除)
-- **缓存策略**:
-  - 首次请求时从 PostgreSQL 查询用户 active 状态
-  - 将结果缓存到 Redis，过期时间为 2 小时
-  - 后续请求优先从缓存读取，如果缓存不存在则重新查询数据库
-  - 如果用户不存在，也会缓存 `"false"` 状态
-- **降级方案**: 如果 Redis 查询失败，会直接查询 PostgreSQL 作为降级方案
+- **工作原理**:
+  - **令牌生成时**: 将 token、并发数（初始化为 0）、active 状态（true）合并存储
+  - **令牌验证时**: 解析合并数据，验证 token 是否匹配，检查 active 状态
+  - **并发控制**:
+    - 接口请求开始时，解析并发数，检查是否小于最大并发数限制
+    - 如果允许，将并发数+1 并更新合并数据
+    - 接口请求结束时（无论成功或失败），将并发数-1 并更新合并数据
+  - **优势**:
+    - 减少 Redis key 数量，提高存储效率
+    - 原子性更新，确保数据一致性
+    - 简化 key 管理，便于清理和维护
 
 **Key 命名规范:**
 
@@ -332,60 +355,80 @@ Redis 用于存储 JWT 令牌和缓存用户状态，实现令牌的快速验证
    // Token 过期时间设置为计算出的过期时间点
    const tokenExp = Math.floor(userExpiresAt / 1000);
 
-   // 生成 token payload（包含 tel）
+   // 生成 token payload（包含 tel 和 maxConcurrent）
    const tokenPayload = {
      tel: tel,
      exp: tokenExp,
+     maxConcurrent: maxConcurrentRequests,
    };
+
+   const token = jwt.sign(tokenPayload, JWT_SECRET);
+
+   // 构建合并数据：token-concurrent-active
+   const initialConcurrent = 0;
+   const initialActive = "true"; // 因为查询时已经过滤了 active = true
+   const combinedData = buildTokenData(token, initialConcurrent, initialActive);
 
    // 存储到 Redis（key 为手机号）
    const redisExpiration = tokenExp - Math.floor(now / 1000);
-   await redisClient.setEx(`token:${tel}`, redisExpiration, token);
+   await redisClient.setEx(`token:${tel}`, redisExpiration, combinedData);
    ```
 
-   在用户通过 `/api/getAccess` 获取令牌时，将令牌存储到 Redis
+   在用户通过 `/api/getAccess` 获取令牌时，将合并数据（token、并发数、active 状态）存储到 Redis
 
 2. **令牌验证时** (`middleware/auth.js`):
 
    ```javascript
    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-   const storedToken = await redisClient.get(`token:${decoded.tel}`);
+   const tokenKey = `token:${decoded.tel}`;
 
-   // 检查用户 active 状态（带缓存）
-   const isActive = await checkUserActive(decoded.tel);
-   if (!isActive) {
+   // 获取合并数据
+   const combinedData = await redisClient.get(tokenKey);
+   if (!combinedData) {
+     return res.status(401).json(/* 401 错误 */);
+   }
+
+   // 解析合并数据
+   const parsedData = parseTokenData(combinedData);
+
+   // 验证 token 是否匹配
+   if (parsedData.token !== token) {
+     return res.status(401).json(/* 401 错误 */);
+   }
+
+   // 检查 active 状态
+   if (parsedData.active !== "true") {
      return res.status(403).json(/* 403 错误 */);
    }
-   ```
 
-   在受保护的路由中验证令牌是否存在且匹配（通过手机号查找），并检查用户 active 状态
-
-3. **用户 active 状态检查** (`middleware/auth.js`):
-
-   ```javascript
-   // 先从 Redis 缓存查询
-   const cachedActive = await redisClient.get(`user:active:${tel}`);
-
-   // 如果缓存不存在，从 PostgreSQL 查询
-   if (cachedActive === null) {
-     const result = await query("SELECT active FROM users WHERE tel = $1", [
-       tel,
-     ]);
-     const isActive = result.rows[0].active === true;
-
-     // 将结果缓存到 Redis，2 小时过期
-     await redisClient.setEx(
-       `user:active:${tel}`,
-       7200,
-       isActive ? "true" : "false"
-     );
-     return isActive;
+   // 检查并发数并更新
+   const maxConcurrent = decoded.maxConcurrent || 1;
+   if (parsedData.concurrent >= maxConcurrent) {
+     return res.status(403).json(/* 并行数超过 */);
    }
 
-   return cachedActive === "true";
+   // 并发数+1并更新合并数据
+   const newConcurrent = parsedData.concurrent + 1;
+   const updatedData = updateConcurrent(combinedData, newConcurrent);
+   const ttl = await redisClient.ttl(tokenKey);
+   await redisClient.setEx(tokenKey, ttl, updatedData);
    ```
 
-   在每次需要 token 鉴权的请求中，都会检查用户 active 状态，优先从缓存读取
+   在受保护的路由中验证令牌是否存在且匹配，检查用户 active 状态和并发数限制，并更新并发数
+
+3. **并发数减少** (`middleware/concurrentControl.js`):
+
+   ```javascript
+   // 在响应结束时减少并发数
+   const combinedData = await redisClient.get(tokenKey);
+   const parsedData = parseTokenData(combinedData);
+   const newConcurrent = Math.max(0, parsedData.concurrent - 1);
+   const updatedData = updateConcurrent(combinedData, newConcurrent);
+   const ttl = await redisClient.ttl(tokenKey);
+   await redisClient.setEx(tokenKey, ttl, updatedData);
+   ```
+
+   在每次请求结束时，自动将并发数-1 并更新合并数据
 
 4. **令牌过期处理**:
 

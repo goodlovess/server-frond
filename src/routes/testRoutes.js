@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
+const { decreaseConcurrentOnFinish } = require('../middleware/concurrentControl');
 const { ResponseUtil } = require('../utils/response');
 
 // Test endpoint without authentication
@@ -9,7 +10,7 @@ router.get('/test', (req, res) => {
 });
 
 // Test endpoint with authentication
-router.get('/testToken', authenticateToken, (req, res) => {
+router.get('/testToken', authenticateToken, decreaseConcurrentOnFinish, (req, res) => {
   res.json(ResponseUtil.success({
     message: 'Test endpoint with authentication',
     user: req.user
