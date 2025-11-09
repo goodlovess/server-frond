@@ -59,7 +59,8 @@ const checkUserActive = async (tel, combinedData = null) => {
 
 const authenticateToken = async (req, res, next) => {
   try {
-    const authHeader = req.headers["Authorization"];
+    // 使用 req.get() 方法，自动处理请求头大小写问题（不区分大小写）
+    const authHeader = req.get("authorization");
     const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
     if (!token) {
@@ -184,7 +185,8 @@ const authenticateToken = async (req, res, next) => {
 // Middleware for optional authentication (for endpoints that don't require token)
 const optionalAuth = async (req, res, next) => {
   try {
-    const authHeader = req.headers["Authorization"];
+    // 使用 req.get() 方法，自动处理请求头大小写问题（不区分大小写）
+    const authHeader = req.get("authorization");
     const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
     if (!token) {
