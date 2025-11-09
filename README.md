@@ -172,6 +172,15 @@ server-frond/
   - 请求会被转发到本地 Ollama 服务
   - 示例: `GET /api/ollama/tags` → `http://localhost:11434/api/tags`
 
+### Python 服务代理端点
+
+- **ALL** `/api/py/*` - Python 本地服务代理端点（需要认证）
+  - 代理所有请求到 `http://localhost:3001/*`
+  - 支持所有 HTTP 方法（GET, POST, PUT, DELETE 等）
+  - 请求会被转发到本地 Python 服务（端口 3001）
+  - 示例: `GET /api/py/health` → `http://localhost:3001/health`
+  - 示例: `POST /api/py/api/endpoint` → `http://localhost:3001/api/endpoint`
+
 ### 认证格式
 
 对于需要认证的端点，在 Authorization 头中包含令牌:
@@ -261,6 +270,9 @@ kill <PID>
 
 # 强制关闭（如果普通关闭无效）
 kill -9 <PID>
+
+# 使用端口号关闭
+lsof -ti:3000 | xargs kill
 ```
 
 #### 方式二：使用 PM2（推荐，生产环境）

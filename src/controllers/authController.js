@@ -25,7 +25,9 @@ const parseDuration = (durationStr) => {
   // 匹配数字和单位 (h, d, y)
   const match = durationStr.match(/^(\d+)([hdy])$/);
   if (!match) {
-    throw new Error("Invalid duration format. Only 'h' (hour), 'd' (day), 'y' (year) are allowed");
+    throw new Error(
+      "Invalid duration format. Only 'h' (hour), 'd' (day), 'y' (year) are allowed"
+    );
   }
 
   const value = parseInt(match[1], 10);
@@ -46,15 +48,25 @@ const getAccess = async (req, res) => {
     const { tel } = req.body;
 
     if (!tel) {
-      return res.status(400).json(ResponseUtil.error("手机号是必填项", ERROR_CODES.GENERAL_ERROR));
+      return res
+        .status(400)
+        .json(ResponseUtil.error("手机号是必填项", ERROR_CODES.GENERAL_ERROR));
     }
 
     // 从 PostgreSQL 通过手机号查询用户信息
-    const userQuery = "SELECT id, tel, username, expires_at, created_at, COALESCE(max_concurrent_requests, 1) as max_concurrent_requests FROM users WHERE tel = $1 AND active = true";
+    const userQuery =
+      "SELECT id, tel, username, expires_at, created_at, COALESCE(max_concurrent_requests, 1) as max_concurrent_requests FROM users WHERE tel = $1 AND active = true";
     const result = await query(userQuery, [tel]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json(ResponseUtil.error("没有该用户或者用户已过期", ERROR_CODES.INVALID_USER));
+      return res
+        .status(404)
+        .json(
+          ResponseUtil.error(
+            "没有该用户或者用户已过期",
+            ERROR_CODES.INVALID_USER
+          )
+        );
     }
 
     const user = result.rows[0];
@@ -64,7 +76,14 @@ const getAccess = async (req, res) => {
     try {
       durationMs = parseDuration(user.expires_at);
     } catch (error) {
-      return res.status(400).json(ResponseUtil.error(`过期时间格式无效：${error.message}`, ERROR_CODES.GENERAL_ERROR));
+      return res
+        .status(400)
+        .json(
+          ResponseUtil.error(
+            `过期时间格式无效：${error.message}`,
+            ERROR_CODES.GENERAL_ERROR
+          )
+        );
     }
 
     // 计算用户账户过期时间点：created_at + expires_at
@@ -74,7 +93,9 @@ const getAccess = async (req, res) => {
 
     // 检查用户账户是否过期
     if (userExpiresAt < now) {
-      return res.status(403).json(ResponseUtil.error("用户账户已过期", ERROR_CODES.INVALID_USER));
+      return res
+        .status(403)
+        .json(ResponseUtil.error("用户账户已过期", ERROR_CODES.INVALID_USER));
     }
 
     // Token 过期时间设置为计算出的过期时间点
@@ -88,15 +109,23 @@ const getAccess = async (req, res) => {
       maxConcurrent: maxConcurrentRequests,
     };
 
-    const token = jwt.sign(tokenPayload, process.env.JWT_SECRET || "secret_key");
+    const token = jwt.sign(
+      tokenPayload,
+      process.env.JWT_SECRET || "secret_key"
+    );
 
     // Store token in Redis with expiration time (使用手机号作为key)
     // 合并存储：token-concurrent-active 格式
+    // 注意：使用 setEx 会覆盖该手机号对应的旧 token，使旧 token 立即失效
     const redisClient = getRedisClient();
     const redisExpiration = tokenExp - Math.floor(now / 1000); // 剩余秒数
     const initialConcurrent = 0;
     const initialActive = "true"; // 因为查询时已经过滤了 active = true
-    const combinedData = buildTokenData(token, initialConcurrent, initialActive);
+    const combinedData = buildTokenData(
+      token,
+      initialConcurrent,
+      initialActive
+    );
     await redisClient.setEx(`token:${tel}`, redisExpiration, combinedData);
 
     res.json(ResponseUtil.success({ token }, "令牌生成成功"));
