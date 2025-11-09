@@ -209,6 +209,8 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ## 运行项目
 
+### 前台运行
+
 使用 npm:
 
 ```bash
@@ -219,6 +221,138 @@ npm start
 
 ```bash
 npm run dev
+```
+
+### 后台运行
+
+#### 方式一：使用 nohup（简单方式）
+
+**启动服务：**
+
+```bash
+# 启动服务并输出日志到 server.log
+nohup npm start > server.log 2>&1 &
+
+# 或者直接使用 node
+nohup node index.js > server.log 2>&1 &
+```
+
+**查看日志：**
+
+```bash
+# 实时查看日志
+tail -f server.log
+
+# 查看最后 100 行日志
+tail -n 100 server.log
+```
+
+**关闭服务：**
+
+```bash
+# 查找进程 ID
+ps aux | grep "node index.js"
+
+# 或者使用 pgrep
+pgrep -f "node index.js"
+
+# 关闭服务（将 PID 替换为实际的进程 ID）
+kill <PID>
+
+# 强制关闭（如果普通关闭无效）
+kill -9 <PID>
+```
+
+#### 方式二：使用 PM2（推荐，生产环境）
+
+PM2 是一个强大的 Node.js 进程管理器，支持自动重启、日志管理、集群模式等功能。
+
+**安装 PM2：**
+
+```bash
+npm install -g pm2
+```
+
+**启动服务：**
+
+```bash
+# 启动服务
+pm2 start index.js --name server-frond
+
+# 或者使用 npm 脚本
+pm2 start npm --name server-frond -- start
+```
+
+**常用 PM2 命令：**
+
+```bash
+# 查看服务状态
+pm2 status
+
+# 查看服务详细信息
+pm2 info server-frond
+
+# 查看日志
+pm2 logs server-frond
+
+# 实时查看日志
+pm2 logs server-frond --lines 100
+
+# 重启服务
+pm2 restart server-frond
+
+# 停止服务
+pm2 stop server-frond
+
+# 删除服务（从 PM2 列表中移除）
+pm2 delete server-frond
+
+# 保存当前 PM2 进程列表（开机自启需要）
+pm2 save
+
+# 设置开机自启
+pm2 startup
+```
+
+**关闭服务：**
+
+```bash
+# 停止服务
+pm2 stop server-frond
+
+# 停止并删除服务
+pm2 delete server-frond
+```
+
+**PM2 配置文件（可选）：**
+
+创建 `ecosystem.config.js` 文件进行更详细的配置：
+
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: "server-frond",
+      script: "index.js",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "1G",
+      env: {
+        NODE_ENV: "production",
+      },
+      error_file: "./logs/pm2-error.log",
+      out_file: "./logs/pm2-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+  ],
+};
+```
+
+使用配置文件启动：
+
+```bash
+pm2 start ecosystem.config.js
 ```
 
 ## 环境变量
