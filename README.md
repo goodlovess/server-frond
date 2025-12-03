@@ -175,6 +175,15 @@ server-frond/
   - 请求会被转发到本地 Ollama 服务
   - 示例: `GET /api/ollama/tags` → `http://localhost:11434/api/tags`
 
+### Python 服务代理端点
+
+- **ALL** `/api/py/*` - Python 本地服务代理端点（需要认证）
+  - 代理所有请求到 `http://localhost:3001/*`
+  - 支持所有 HTTP 方法（GET, POST, PUT, DELETE 等）
+  - 请求会被转发到本地 Python 服务（端口 3001）
+  - 示例: `GET /api/py/health` → `http://localhost:3001/health`
+  - 示例: `POST /api/py/api/endpoint` → `http://localhost:3001/api/endpoint`
+
 ### 认证格式
 
 对于需要认证的端点，在 Authorization 头中包含令牌:
@@ -212,6 +221,8 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 ## 运行项目
 
+### 前台运行
+
 使用 npm:
 
 ```bash
@@ -222,6 +233,188 @@ npm start
 
 ```bash
 npm run dev
+```
+
+### 后台运行
+
+#### 方式一：使用项目提供的脚本（推荐）
+
+项目提供了便捷的启动和停止脚本，自动处理进程管理和错误检查。
+
+**启动服务：**
+
+```bash
+./start.sh
+```
+
+脚本会自动：
+
+- 检查服务是否已在运行
+- 检查端口是否被占用
+- 检查必要的依赖和配置文件
+- 启动服务并保存进程 ID
+- 验证服务是否成功启动
+
+**停止服务：**
+
+```bash
+./stop.sh
+```
+
+脚本会自动：
+
+- 通过多种方式查找服务进程（PID 文件、端口、进程名）
+- 优雅地停止服务
+- 如果无法正常停止，会强制终止
+- 清理 PID 文件
+
+**查看日志：**
+
+```bash
+# 实时查看日志
+tail -f server.log
+
+# 查看最后 100 行日志
+tail -n 100 server.log
+```
+
+**注意事项：**
+
+- 脚本会在项目根目录创建 `server.pid` 文件保存进程 ID
+- 日志文件为 `server.log`
+- 如果脚本没有执行权限，运行：`chmod +x start.sh stop.sh`
+
+#### 方式二：使用 nohup（简单方式）
+
+**启动服务：**
+
+```bash
+# 启动服务并输出日志到 server.log
+nohup npm start > server.log 2>&1 &
+
+# 或者直接使用 node
+nohup node index.js > server.log 2>&1 &
+```
+
+**查看日志：**
+
+```bash
+# 实时查看日志
+tail -f server.log
+
+# 查看最后 100 行日志
+tail -n 100 server.log
+```
+
+**关闭服务：**
+
+```bash
+# 查找进程 ID
+ps aux | grep "node index.js"
+
+# 或者使用 pgrep
+pgrep -f "node index.js"
+
+# 关闭服务（将 PID 替换为实际的进程 ID）
+kill <PID>
+
+# 强制关闭（如果普通关闭无效）
+kill -9 <PID>
+
+# 使用端口号关闭
+lsof -ti:3000 | xargs kill
+```
+
+#### 方式三：使用 PM2（推荐，生产环境）
+
+PM2 是一个强大的 Node.js 进程管理器，支持自动重启、日志管理、集群模式等功能。
+
+**安装 PM2：**
+
+```bash
+npm install -g pm2
+```
+
+**启动服务：**
+
+```bash
+# 启动服务
+pm2 start index.js --name server-frond
+
+# 或者使用 npm 脚本
+pm2 start npm --name server-frond -- start
+```
+
+**常用 PM2 命令：**
+
+```bash
+# 查看服务状态
+pm2 status
+
+# 查看服务详细信息
+pm2 info server-frond
+
+# 查看日志
+pm2 logs server-frond
+
+# 实时查看日志
+pm2 logs server-frond --lines 100
+
+# 重启服务
+pm2 restart server-frond
+
+# 停止服务
+pm2 stop server-frond
+
+# 删除服务（从 PM2 列表中移除）
+pm2 delete server-frond
+
+# 保存当前 PM2 进程列表（开机自启需要）
+pm2 save
+
+# 设置开机自启
+pm2 startup
+```
+
+**关闭服务：**
+
+```bash
+# 停止服务
+pm2 stop server-frond
+
+# 停止并删除服务
+pm2 delete server-frond
+```
+
+**PM2 配置文件（可选）：**
+
+创建 `ecosystem.config.js` 文件进行更详细的配置：
+
+```javascript
+module.exports = {
+  apps: [
+    {
+      name: "server-frond",
+      script: "index.js",
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "1G",
+      env: {
+        NODE_ENV: "production",
+      },
+      error_file: "./logs/pm2-error.log",
+      out_file: "./logs/pm2-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+    },
+  ],
+};
+```
+
+使用配置文件启动：
+
+```bash
+pm2 start ecosystem.config.js
 ```
 
 ## 环境变量

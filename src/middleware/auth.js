@@ -59,7 +59,8 @@ const checkUserActive = async (tel, combinedData = null) => {
 
 const authenticateToken = async (req, res, next) => {
   try {
-    const authHeader = req.headers["Authorization"];
+    // 使用 req.get() 方法，自动处理请求头大小写问题（不区分大小写）
+    const authHeader = req.get("authorization");
     const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
     if (!token) {
@@ -96,12 +97,13 @@ const authenticateToken = async (req, res, next) => {
     const parsedData = parseTokenData(combinedData);
 
     // 验证 token 是否匹配
+    // 如果不匹配，说明用户已经生成了新的 token，旧的 token 已失效
     if (parsedData.token !== token) {
       return res
         .status(401)
         .json(
           ResponseUtil.unauthorized(
-            "令牌无效或已过期",
+            "令牌已失效，请重新获取",
             ERROR_CODES.TOKEN_INVALID
           )
         );
@@ -183,7 +185,8 @@ const authenticateToken = async (req, res, next) => {
 // Middleware for optional authentication (for endpoints that don't require token)
 const optionalAuth = async (req, res, next) => {
   try {
-    const authHeader = req.headers["Authorization"];
+    // 使用 req.get() 方法，自动处理请求头大小写问题（不区分大小写）
+    const authHeader = req.get("authorization");
     const token = authHeader && authHeader.split(" ")[1]; // Bearer TOKEN
 
     if (!token) {
