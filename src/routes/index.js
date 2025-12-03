@@ -4,10 +4,12 @@ const { authenticateToken, optionalAuth } = require("../middleware/auth");
 const { decreaseConcurrentOnFinish } = require("../middleware/concurrentControl");
 const { getAccess } = require("../controllers/authController");
 const { ollamaRequest } = require("../controllers/ollamaController");
+const { getRedisStringByKey } = require("../controllers/redisController");
 const testRoutes = require("./testRoutes");
 
 // Public routes
 router.post("/getAccess", getAccess);
+router.get("/redis/getString", getRedisStringByKey);
 
 // Test routes (with and without authentication)
 router.use("/test", testRoutes);

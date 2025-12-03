@@ -154,6 +154,9 @@ server-frond/
 ### 公共端点(无需认证)
 
 - **POST** `/api/getAccess` - 生成访问令牌
+- **GET** `/api/redis/getString` - 根据 key 从 Redis 获取字符串（未命中时返回“消息已过期~”）
+  - 仅允许从 `gzhpush.kebubei.cn` 域名发起的请求
+  - `key` 参数必须以 `back-` 为前缀
   - 请求体: `{ "tel": "13800138000" }`
   - 响应: `{ "code": 0, "data": { "token": "jwt_token" }, "msg": "Token generated successfully" }`
   - 说明: 通过手机号查询用户信息，验证用户有效性后生成 JWT 令牌
