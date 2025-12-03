@@ -155,7 +155,7 @@ server-frond/
 
 - **POST** `/api/getAccess` - 生成访问令牌
 - **GET** `/api/redis/getString` - 根据 key 从 Redis 获取字符串（未命中时返回“消息已过期~”）
-  - 仅允许从 `gzhpush.kebubei.cn` 域名发起的请求
+  - 仅允许 `User-Agent` 中包含 `Cloudflare-Worker` 的请求访问（建议只在 Cloudflare Worker 中调用）
   - `key` 参数必须以 `back-` 为前缀
   - 请求体: `{ "tel": "13800138000" }`
   - 响应: `{ "code": 0, "data": { "token": "jwt_token" }, "msg": "Token generated successfully" }`

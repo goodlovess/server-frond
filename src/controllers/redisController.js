@@ -1,33 +1,21 @@
 const { getRedisClient } = require("../config/redis");
 const { ResponseUtil, ERROR_CODES } = require("../utils/response");
 
-const ALLOWED_HOST = "gzhpush.kebubei.cn";
 const ALLOWED_PREFIX = "back-";
-
-/** 解析 Origin/Referer，获取 hostname */
-const getHostnameFromHeader = (headerValue) => {
-  if (!headerValue) return null;
-  try {
-    const url = new URL(headerValue);
-    return url.hostname;
-  } catch {
-    return null;
-  }
-};
 
 /**
  * 根据 key 从 Redis 获取字符串数据
- * - 限定请求来源域名
+ * - 仅允许 User-Agent 包含 Cloudflare-Worker 的请求访问
  * - 仅允许查询以 back- 前缀的 key
  * - 如果 key 不存在或没有数据，返回兜底信息“消息已过期~”
  */
 const getRedisStringByKey = async (req, res) => {
   try {
-    const originHeader = req.get("origin") || req.get("referer");
-    const requestHost = getHostnameFromHeader(originHeader);
+    const userAgent = req.get("user-agent") || "";
+    const isCloudflareWorker = userAgent.includes("Cloudflare-Worker");
 
-    if (requestHost !== ALLOWED_HOST) {
-      return res.status(403).json(ResponseUtil.error("请求来源不允许", ERROR_CODES.FORBIDDEN));
+    if (!isCloudflareWorker) {
+      return res.status(403).json(ResponseUtil.error("仅允许 Cloudflare Worker 访问此接口", ERROR_CODES.FORBIDDEN));
     }
 
     const { key } = req.query;
