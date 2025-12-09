@@ -184,6 +184,16 @@ server-frond/
   - 示例: `GET /api/py/health` → `http://localhost:3001/health`
   - 示例: `POST /api/py/api/endpoint` → `http://localhost:3001/api/endpoint`
 
+### RSSHub 代理端点
+
+- **ALL** `/api/rsshub/*` - RSSHub 服务代理端点（需要认证）
+  - 代理所有请求到 `http://localhost:1200/*`
+  - 支持所有 HTTP 方法（GET, POST, PUT, DELETE 等）
+  - 请求会被转发到本地 RSSHub 服务（端口 1200）
+  - 子路由由参数传入，支持 RSSHub 的所有路由
+  - 示例: `GET /api/rsshub/weibo/user/1727858283?limit=10&format=json` → `http://localhost:1200/weibo/user/1727858283?limit=10&format=json`
+  - 示例: `GET /api/rsshub/xiaohongshu/user/685f6318000000001d014935/notes?limit=10&format=json` → `http://localhost:1200/xiaohongshu/user/685f6318000000001d014935/notes?limit=10&format=json`
+
 ### 认证格式
 
 对于需要认证的端点，在 Authorization 头中包含令牌:
