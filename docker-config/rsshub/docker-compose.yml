@@ -38,6 +38,8 @@ services:
   browserless: # marked
     image: browserless/chrome # marked
     restart: always # marked
+    # ⬇️ 新增这一行：增加共享内存大小
+    shm_size: "1gb"
     ulimits: # marked
       core: # marked
         hard: 0 # marked
