@@ -25,10 +25,13 @@ const rsshubRequest = async (req, res) => {
     // 构建目标路径
     const targetPath = `${TARGET_BASE_PATH}${originalPath}`;
 
-    // 获取查询字符串
-    const queryString = req.originalUrl.includes("?")
-      ? req.originalUrl.split("?")[1]
-      : "";
+    // 获取查询字符串并默认追加 key=haotian
+    const rawQuery = req.originalUrl.includes("?") ? req.originalUrl.split("?")[1] : "";
+    const searchParams = new URLSearchParams(rawQuery);
+    if (!searchParams.has("key")) {
+      searchParams.set("key", "haotian");
+    }
+    const queryString = searchParams.toString();
     const fullPath = queryString ? `${targetPath}?${queryString}` : targetPath;
 
     // 准备请求选项
@@ -73,13 +76,7 @@ const rsshubRequest = async (req, res) => {
       rsshubRes.on("error", (error) => {
         console.error("RSSHub response error:", error);
         if (!res.headersSent) {
-          res
-            .status(500)
-            .json(
-              ResponseUtil.serverError(
-                `RSSHub 响应错误：${error.message}`
-              )
-            );
+          res.status(500).json(ResponseUtil.serverError(`RSSHub 响应错误：${error.message}`));
         }
       });
     });
@@ -88,9 +85,7 @@ const rsshubRequest = async (req, res) => {
     rsshubReq.on("error", (error) => {
       console.error("RSSHub request error:", error);
       if (!res.headersSent) {
-        res
-          .status(500)
-          .json(ResponseUtil.serverError(`RSSHub 错误：${error.message}`));
+        res.status(500).json(ResponseUtil.serverError(`RSSHub 错误：${error.message}`));
       }
     });
 
@@ -112,12 +107,9 @@ const rsshubRequest = async (req, res) => {
   } catch (error) {
     console.error("RSSHub controller error:", error);
     if (!res.headersSent) {
-      res
-        .status(500)
-        .json(ResponseUtil.serverError(`RSSHub 错误：${error.message}`));
+      res.status(500).json(ResponseUtil.serverError(`RSSHub 错误：${error.message}`));
     }
   }
 };
 
 module.exports = { rsshubRequest };
-
