@@ -28,7 +28,7 @@ services:
     image: ghcr.io/hyoban/puppeteer-real-browser-hono
     restart: always
     ports:
-      - "3001:3000"
+      - "1201:3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000"]
       interval: 30s
