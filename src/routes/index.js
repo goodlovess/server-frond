@@ -15,6 +15,7 @@ const { ollamaRequest } = require("../controllers/ollamaController");
 const { getRedisStringByKey } = require("../controllers/redisController");
 const { pythonRequest } = require("../controllers/pythonController");
 const { rsshubRequest } = require("../controllers/rsshubController");
+const { crawlRequest } = require("../controllers/crawlController");
 const testRoutes = require("./testRoutes");
 
 // Public routes
@@ -44,6 +45,14 @@ router.all("/py*", authenticateToken, decreaseConcurrentOnFinish, (req, res, nex
 // 子路由由参数传入，如 /api/rsshub/weibo/user/1727858283?limit=10&format=json
 router.all("/rsshub*", authenticateToken, decreaseConcurrentOnFinish, (req, res, next) => {
   rsshubRequest(req, res);
+});
+
+// Crawl routes (require authentication)
+// 代理 /api/crawl/* 到 http://localhost:11235/*
+// 使用 all 方法支持所有 HTTP 方法 (GET, POST, PUT, DELETE, etc.)
+// 子路由由参数传入，如 /api/crawl/crawl、/api/crawl/md 等
+router.all("/crawl*", authenticateToken, decreaseConcurrentOnFinish, (req, res, next) => {
+  crawlRequest(req, res);
 });
 
 // Protected routes example (these will require authentication)
