@@ -204,6 +204,99 @@ server-frond/
   - 示例: `POST /api/crawl/crawl` → `POST http://localhost:11235/crawl`
   - 示例: `POST /api/crawl/md` → `POST http://localhost:11235/md`
 
+### Browserless 截图端点
+
+- **POST** `/api/browserless/screenshot` - 网页截图服务（需要认证）
+  - 使用 Puppeteer 直接连接到 browserless 的 WebSocket 端点
+  - 根据参数对指定网页进行截图并返回图片
+  - 支持通过 CSS 选择器限制截图区域（class 或 id）
+  - 如果不传选择器参数，则返回整个页面的截图
+  - 支持通过查询参数或请求体传递参数
+
+**请求参数：**
+
+| 参数 | 类型 | 必需 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `url` | string | 是 | - | 要截图的网页地址 |
+| `selector` | string | 否 | - | CSS 选择器，用于限制截图区域（如 `.abc` 或 `#test`）。如果不传，则截图整个页面 |
+| `waitUntil` | string | 否 | networkidle0 | 等待条件（networkidle0, load, domcontentloaded 等） |
+| `format` | string | 否 | png | 图片格式（png, jpeg, webp） |
+| `quality` | number | 否 | - | 图片质量（0-100，仅对 jpeg/webp 有效） |
+| `restype` | string | 否 | binary | 返回数据格式：`base64` 返回 base64 编码的 JSON 响应，`binary` 或不传则返回二进制图片数据 |
+
+**使用示例：**
+
+```bash
+# 使用查询参数 - 截图整个页面
+POST /api/browserless/screenshot?url=https://example.com
+
+# 使用查询参数 - 截图指定元素（通过 class）
+POST /api/browserless/screenshot?url=https://example.com&selector=.abc
+
+# 使用查询参数 - 截图指定元素（通过 id）
+POST /api/browserless/screenshot?url=https://example.com&selector=#test
+
+# 使用请求体（JSON）- 截图整个页面
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "format": "png"
+}
+
+# 使用请求体（JSON）- 截图指定元素
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "selector": ".abc",
+  "format": "png"
+}
+
+# 使用请求体（JSON）- 返回 base64 格式
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "selector": ".abc",
+  "format": "png",
+  "restype": "base64"
+}
+```
+
+**响应格式：**
+
+1. **默认（binary 或不传 restype）**：
+   - 成功：返回图片二进制数据，Content-Type 为 `image/png`、`image/jpeg` 或 `image/webp`
+   - 失败：返回 JSON 格式错误信息
+
+2. **base64 格式（restype="base64"）**：
+   - 成功：返回 JSON 格式，包含以下字段：
+     ```json
+     {
+       "code": 0,
+       "data": {
+         "image": "base64编码的图片字符串",
+         "format": "png",
+         "dataUrl": "data:image/png;base64,..."
+       },
+       "msg": "截图成功"
+     }
+     ```
+   - 失败：返回 JSON 格式错误信息
+
+**注意：** 如果选择器未找到元素，会返回 404 错误
+
+**其他 Browserless API：**
+
+- **ALL** `/api/browserless/*` - Browserless 服务通用代理端点（需要认证）
+  - 代理所有请求到 `http://localhost:1202/*`
+  - 支持所有 HTTP 方法（GET, POST, PUT, DELETE 等）
+  - 可用于访问 Browserless 的其他 API 端点
+
 ### 认证格式
 
 对于需要认证的端点，在 Authorization 头中包含令牌:

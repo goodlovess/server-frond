@@ -38,6 +38,8 @@ services:
   browserless: # marked
     image: browserless/chrome # marked
     restart: always # marked
+    ports:
+      - "1202:3000" # 暴露端口用于截图服务
     ulimits: # marked
       core: # marked
         hard: 0 # marked
