@@ -28,6 +28,7 @@ const screenshotRequest = async (req, res) => {
       ? parseInt(req.body.quality)
       : undefined;
     const restype = req.query.restype || req.body.restype; // 返回数据格式：base64 或 binary（默认）
+    const deldom = req.query.deldom || req.body.deldom; // 要删除的 DOM 元素选择器，如果页面存在该元素则删除，不存在则忽略
 
     // 验证必需参数
     if (!url) {
@@ -45,6 +46,61 @@ const screenshotRequest = async (req, res) => {
     try {
       // 导航到目标 URL
       await page.goto(url, { waitUntil: waitUntil, timeout: 30000 });
+
+      // 如果提供了 deldom 参数，尝试删除指定的 DOM 元素
+      // 支持多个选择器，用 "|" 分割，逐一删除
+      if (deldom) {
+        try {
+          // 等待一小段时间确保页面加载完成
+          await new Promise((resolve) => setTimeout(resolve, 500));
+
+          // 按 "|" 分割选择器，逐一删除
+          const selectors = deldom
+            .split("|")
+            .map((s) => s.trim())
+            .filter((s) => s.length > 0);
+          let totalDeleted = 0;
+
+          for (const selector of selectors) {
+            try {
+              // 尝试删除元素，如果元素不存在则忽略（querySelectorAll 返回空数组不会报错）
+              const deletedCount = await page.evaluate((sel) => {
+                const elements = document.querySelectorAll(sel);
+                let count = 0;
+                elements.forEach((el) => {
+                  if (el && el.parentNode) {
+                    el.parentNode.removeChild(el);
+                    count++;
+                  }
+                });
+                return count;
+              }, selector);
+
+              if (deletedCount > 0) {
+                console.log(
+                  `已删除 ${deletedCount} 个选择器对应的元素: ${selector}`
+                );
+                totalDeleted += deletedCount;
+              } else {
+                console.log(`未找到选择器对应的元素（已忽略）: ${selector}`);
+              }
+            } catch (error) {
+              // 如果删除失败，忽略错误继续执行下一个选择器
+              console.log(
+                `删除元素时出错（已忽略）: ${selector}`,
+                error.message
+              );
+            }
+          }
+
+          if (totalDeleted > 0) {
+            console.log(`总共删除 ${totalDeleted} 个元素`);
+          }
+        } catch (error) {
+          // 如果整体删除过程失败，忽略错误继续执行
+          console.log(`删除元素时出错（已忽略）: ${deldom}`, error.message);
+        }
+      }
 
       let screenshot;
       const screenshotOptions = {

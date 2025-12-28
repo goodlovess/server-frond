@@ -215,14 +215,15 @@ server-frond/
 
 **请求参数：**
 
-| 参数 | 类型 | 必需 | 默认值 | 说明 |
-|------|------|------|--------|------|
-| `url` | string | 是 | - | 要截图的网页地址 |
-| `selector` | string | 否 | - | CSS 选择器，用于限制截图区域（如 `.abc` 或 `#test`）。如果不传，则截图整个页面 |
-| `waitUntil` | string | 否 | networkidle0 | 等待条件（networkidle0, load, domcontentloaded 等） |
-| `format` | string | 否 | png | 图片格式（png, jpeg, webp） |
-| `quality` | number | 否 | - | 图片质量（0-100，仅对 jpeg/webp 有效） |
-| `restype` | string | 否 | binary | 返回数据格式：`base64` 返回 base64 编码的 JSON 响应，`binary` 或不传则返回二进制图片数据 |
+| 参数        | 类型   | 必需 | 默认值       | 说明                                                                                                                |
+| ----------- | ------ | ---- | ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `url`       | string | 是   | -            | 要截图的网页地址                                                                                                    |
+| `selector`  | string | 否   | -            | CSS 选择器，用于限制截图区域（如 `.abc` 或 `#test`）。如果不传，则截图整个页面                                      |
+| `waitUntil` | string | 否   | networkidle0 | 等待条件（networkidle0, load, domcontentloaded 等）                                                                 |
+| `format`    | string | 否   | png          | 图片格式（png, jpeg, webp）                                                                                         |
+| `quality`   | number | 否   | -            | 图片质量（0-100，仅对 jpeg/webp 有效）                                                                              |
+| `restype`   | string | 否   | binary       | 返回数据格式：`base64` 返回 base64 编码的 JSON 响应，`binary` 或不传则返回二进制图片数据                            |
+| `deldom`    | string | 否   | -            | 要删除的 DOM 元素选择器，多个选择器用 `|` 分割（如 `.ad|#popup|.banner`）。如果页面存在该选择器对应的元素，会在截图前逐一删除；如果不存在，则忽略 |
 
 **使用示例：**
 
@@ -265,11 +266,23 @@ Content-Type: application/json
   "format": "png",
   "restype": "base64"
 }
+
+# 使用请求体（JSON）- 删除干扰元素后截图
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "selector": ".content",
+  "deldom": ".ad|#popup|.banner",
+  "format": "png"
+}
 ```
 
 **响应格式：**
 
 1. **默认（binary 或不传 restype）**：
+
    - 成功：返回图片二进制数据，Content-Type 为 `image/png`、`image/jpeg` 或 `image/webp`
    - 失败：返回 JSON 格式错误信息
 
