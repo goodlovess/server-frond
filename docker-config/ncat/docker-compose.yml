@@ -1,0 +1,35 @@
+services:
+  traefik:
+    image: "traefik"
+    restart: unless-stopped
+    command:
+      - "--api=true"
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:3003"
+    ports:
+      - "3003:3003"
+    volumes:
+      - traefik_data:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+  ncat:
+    image: stephengpope/no-code-architects-toolkit:latest
+    env_file:
+      - .env
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.ncat.rule=Host(`localhost`) || Host(`127.0.0.1`)
+      - traefik.http.routers.ncat.entrypoints=web
+    volumes:
+      - storage:/var/www/html/storage/app
+      - logs:/var/www/html/storage/logs
+    restart: unless-stopped
+
+volumes:
+  traefik_data:
+    driver: local
+  storage:
+    driver: local
+  logs:
+    driver: local
