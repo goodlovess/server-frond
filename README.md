@@ -204,6 +204,17 @@ server-frond/
   - 示例: `POST /api/crawl/crawl` → `POST http://localhost:11235/crawl`
   - 示例: `POST /api/crawl/md` → `POST http://localhost:11235/md`
 
+### Ncat 代理端点
+
+- **ALL** `/api/ncat/*` - Ncat 服务代理端点（需要认证）
+  - 代理所有请求到 `http://localhost:3003/v1/*`
+  - 支持所有 HTTP 方法（GET, POST, PUT, DELETE 等）
+  - 请求会被转发到本地 Ncat 服务（端口 3003）
+  - 默认在请求头中添加 `x-api-key: haotian`
+  - 子路由由参数传入，支持 Ncat 服务的所有路由
+  - 示例: `GET /api/ncat/xxx` → `GET http://localhost:3003/v1/xxx`（自动添加 x-api-key 请求头）
+  - 示例: `POST /api/ncat/yyy` → `POST http://localhost:3003/v1/yyy`（自动添加 x-api-key 请求头）
+
 ### Browserless 截图端点
 
 - **POST** `/api/browserless/screenshot` - 网页截图服务（需要认证）

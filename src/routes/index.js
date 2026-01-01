@@ -22,6 +22,7 @@ const {
   screenshotRequest,
   browserlessRequest,
 } = require("../controllers/browserlessController");
+const { ncatRequest } = require("../controllers/ncatController");
 const testRoutes = require("./testRoutes");
 
 // Public routes
@@ -105,6 +106,20 @@ router.all(
   decreaseConcurrentOnFinish,
   (req, res, next) => {
     browserlessRequest(req, res);
+  }
+);
+
+// Ncat routes (require authentication)
+// 代理 /api/ncat/* 到 http://localhost:3003/v1/*
+// 使用 all 方法支持所有 HTTP 方法 (GET, POST, PUT, DELETE, etc.)
+// 默认在请求头中添加 x-api-key: haotian
+// 子路由由参数传入，如 /api/ncat/xxx → http://localhost:3003/v1/xxx
+router.all(
+  "/ncat*",
+  authenticateToken,
+  decreaseConcurrentOnFinish,
+  (req, res, next) => {
+    ncatRequest(req, res);
   }
 );
 
