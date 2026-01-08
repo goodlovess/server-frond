@@ -290,6 +290,43 @@ Content-Type: application/json
   "deldom": ".ad|#popup|.banner",
   "format": "png"
 }
+
+# 使用请求体(JSON)- 自定义视口大小(2K分辨率)
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "width": 2560,
+  "height": 1440,
+  "format": "png"
+}
+
+# 使用请求体(JSON)- 4K分辨率截图
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "width": 3840,
+  "height": 2160,
+  "format": "png"
+}
+
+# 使用请求体(JSON)- 移动端尺寸截图
+POST /api/browserless/screenshot
+Content-Type: application/json
+
+{
+  "url": "https://example.com",
+  "width": 375,
+  "height": 812,
+  "format": "png"
+}
+
+# 使用查询参数 - 自定义视口大小
+POST /api/browserless/screenshot?url=https://example.com&width=2560&height=1440&format=png
+
 ```
 
 **响应格式：**
