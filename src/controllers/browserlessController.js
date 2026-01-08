@@ -29,6 +29,8 @@ const screenshotRequest = async (req, res) => {
       : undefined;
     const restype = req.query.restype || req.body.restype; // 返回数据格式：base64 或 binary（默认）
     const deldom = req.query.deldom || req.body.deldom; // 要删除的 DOM 元素选择器，如果页面存在该元素则删除，不存在则忽略
+    const viewportWidth = req.query.width || req.body.width || 1920; // 视口宽度,默认 1920
+    const viewportHeight = req.query.height || req.body.height || 1080; // 视口高度,默认 1080
 
     // 验证必需参数
     if (!url) {
@@ -42,6 +44,13 @@ const screenshotRequest = async (req, res) => {
 
     // 创建新页面
     const page = await browser.newPage();
+
+    // 设置视口大小
+    await page.setViewport({
+      width: parseInt(viewportWidth),
+      height: parseInt(viewportHeight),
+      deviceScaleFactor: 1,
+    });
 
     try {
       // 导航到目标 URL
